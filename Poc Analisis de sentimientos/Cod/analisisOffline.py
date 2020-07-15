@@ -9,6 +9,12 @@ from textblob import TextBlob
 import matplotlib.pyplot as plt 
 from azureTextAnalitic import AzureAnalisis
 import xlsxwriter
+import numpy as np
+from datetime import date
+from datetime import datetime
+
+# Día actual
+today = date.today()
 
 # Azure keys
 subscription_key = "a1628afdd27b418d91dcfa4aab7b50f3"
@@ -29,7 +35,9 @@ client = analisis.authenticate_client()
 # Se autentica en twitter
 auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
 auth.set_access_token(access_token, access_token_secret)
-api = tweepy.API(auth)
+api = tweepy.API(auth,
+                 wait_on_rate_limit=True,
+                 wait_on_rate_limit_notify=True)
 
 
 # Creo el libro excel y una hoja
@@ -41,6 +49,9 @@ outSheet = outWorkbook.add_worksheet()
 outSheet.write("A1", "Nombre")
 outSheet.write("B1", "Texto")
 outSheet.write("C1", "Emocion")
+outSheet.write("D1", "Score Positivo")
+outSheet.write("E1", "Score Neutral")
+outSheet.write("F1", "Score Negativo")
 
 
 #Se pregunta por la palabra a buscar
@@ -57,9 +68,10 @@ numero_de_Tweets = int(input(u"Número de tweets a capturar: "))
 
 def ObtenerTweets(palabra="OSDE",times=100):
     #Se define las listas que capturan la popularidad
-    popularidad_list = []
-    numeros_list = []
-    numero = 1
+    positivos_list = []
+    neutros_list = []
+    negativos_list = []
+    total = 0
     # Indice para escribir en  excel
     excelIndex = 2  
     for tweet in tweepy.Cursor(api.search, palabra, tweet_mode='extended').items(numero_de_Tweets):
@@ -69,7 +81,7 @@ def ObtenerTweets(palabra="OSDE",times=100):
                 text = "RT: " + tweet._json['retweeted_status']['full_text']
                 print("RT: ", tweet._json['retweeted_status']['full_text'])
             else:
-                text = "NO RT:" + tweet.full_text
+                text = "NO RT: " + tweet.full_text
                 print("NO RT: " + tweet.full_text)
             # print(tweet.full_text)
             
@@ -84,23 +96,47 @@ def ObtenerTweets(palabra="OSDE",times=100):
                 # Texto
                 outSheet.write("B"+ str(excelIndex), text)
                 # Emocion
+                # print(analisis.sentiment_analysis_example(client, text))
                 outSheet.write("C"+ str(excelIndex), analisis.sentiment_analysis_example(client, text).sentiment)
+
+                # Positivos
+                #
+                scoresPositive = analisis.sentiment_analysis_example(client, text).confidence_scores.positive
+            
+                # Neutral
+                #
+                scoresNeutral = analisis.sentiment_analysis_example(client, text).confidence_scores.neutral
+
+                # Negativos
+                #
+                scoresNegative = analisis.sentiment_analysis_example(client, text).confidence_scores.negative
+
+
+                outSheet.write("D"+ str(excelIndex), scoresPositive)
+                outSheet.write("E"+ str(excelIndex), scoresNeutral)
+                outSheet.write("F"+ str(excelIndex), scoresNegative)
+                # keyPhrases = analisis.sentiment_analysis_example(client, text).key_phrases[0]
+                # outSheet.write("F"+ str(excelIndex), keyPhrases) 
                 excelIndex+=1
             print("*"*20)
-            # analisis = TextBlob(tweet.text)
-            # analisis = analisis.sentiment
-            # popularidad = analisis.sentiment_analysis_example(client, tweet.text).confidence_scores
-            # popularidad_list.append(popularidad)
-            # numeros_list.append(numero)
-            # numero = numero + 1
-            # print(tweet.text)
+
+            
+            # Score Positive
+            positivos_list.append(analisis.sentiment_analysis_example(client, text).confidence_scores.positive)
+            # Score Neutral
+            neutros_list.append(analisis.sentiment_analysis_example(client, text).confidence_scores.neutral)
+            # Score negative
+            negativos_list.append(analisis.sentiment_analysis_example(client, text).confidence_scores.negative)
+            # Sumo total de procesados
+            total+=1
 
         except tweepy.TweepError as e:
             print(e.reason)
 
         except StopIteration:
             break
-    # return (numeros_list,popularidad_list,numero)
+
+    return (positivos_list, neutros_list, negativos_list, total)
 
 
 
@@ -108,28 +144,54 @@ def ObtenerTweets(palabra="OSDE",times=100):
 
 
 
-# def GraficarDatos(numeros_list,popularidad_list,numero):
-#     axes = plt.gca()
-#     axes.set_ylim([-1, 2])
+def GraficarDatos(positivos_list,neutros_list,negativos_list,total):
+
+    # Saco totales
+    #
+    totalPositivos = sum(positivos_list)
+    totalNeutros = sum(neutros_list)
+    totalNegativos = sum(negativos_list)
+
+    # Saco promedios
+    #
+    promPositivos= (totalPositivos/total)*100
+    promNeutros= (totalNeutros/total)*100
+    promNegativos= (totalNegativos/total)*100
+
+
+    # Grafico
+    #
+    fig = plt.figure("Analisis Twitter")
+    grupo1 = fig.add_subplot(111)
+    plt.title("Analisis de sensaciones Twitter")
+
+
+    sensaciones = ["Positivos", "Neutrales", "Negativos"]
+    calif1 = np.array([promPositivos, promNeutros, promNegativos])
+
+
+    grupo1.bar(sensaciones, calif1, align="center", color=['green','orange','red'])
+    grupo1.set_xticks(sensaciones)
+    grupo1.set_xticklabels(sensaciones)
+    grupo1.set_ylabel("SCORE PROMEDIADO")
+
+    plt.savefig("Analisis_Twitter_"+str(today)+".jpg")
+    plt.show()
     
-#     plt.scatter(numeros_list, popularidad_list)
-#     popularidadPromedio = (sum(popularidad_list))/(len(popularidad_list))
-#     popularidadPromedio = "{0:.0f}%".format(popularidadPromedio * 100)
-#     time  = datetime.now().strftime("A : %H:%M\n El: %m-%d-%y")
-#     plt.text(0, 1.25, 
-#             "Sentimiento promedio:  " + str(popularidadPromedio) + "\n" + time, 
-#             fontsize=12, 
-#             bbox = dict(facecolor='none', 
-#                         edgecolor='black', 
-#                         boxstyle='square, pad = 1'))
-    
-#     plt.title("Sentimientos sobre " + palabra + " en twitter")
-#     plt.xlabel("Numero de tweets")
-#     plt.ylabel("Sentimiento")
-#     plt.show()
+    return promNegativos
+
+
+
+
+
+
+
 
 if __name__ == "__main__":
-    ObtenerTweets(palabra,numero_de_Tweets)
+    positivos, neutros, negativos, total = ObtenerTweets(palabra,numero_de_Tweets)
+    print(positivos, neutros, negativos, total)
+    negativos = GraficarDatos(positivos, neutros, negativos, total)
 
+    print("negativos : " + str(round(negativos)))
     # Cierro el excel para que se cree/guarde
     outWorkbook.close()
