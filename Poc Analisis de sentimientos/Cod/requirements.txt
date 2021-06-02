@@ -110,7 +110,7 @@ tqdm==4.47.0
 traitlets==4.3.3
 tweepy==3.9.0
 tzlocal==1.5.1
-urllib3==1.25.9
+urllib3==1.26.5
 vaderSentiment==3.3.2
 Wand==0.6.1
 wcwidth==0.2.5
