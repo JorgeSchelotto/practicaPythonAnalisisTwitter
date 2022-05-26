@@ -97,7 +97,7 @@ SpeechRecognition==3.8.1
 tabula-py==2.1.1
 tensorboard==2.2.2
 tensorboard-plugin-wit==1.7.0
-tensorflow==2.2.0
+tensorflow==2.7.2
 tensorflow-estimator==2.2.0
 termcolor==1.1.0
 textblob==0.15.3
